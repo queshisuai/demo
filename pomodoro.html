@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>番茄钟 - Pomodoro Timer</title>
+<style>
+  :root {
+    --bg: #1a1a2e;
+    --card: #16213e;
+    --work: #e94560;
+    --short-break: #0f3460;
+    --long-break: #533483;
+    --text: #eee;
+    --muted: #a0a0b0;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+
+  .container {
+    text-align: center;
+    padding: 2rem;
+    min-width: 360px;
+  }
+
+  h1 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 1.5rem;
+    letter-spacing: 0.05em;
+    color: var(--muted);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 2rem;
+    background: var(--card);
+    border-radius: 12px;
+    padding: 4px;
+  }
+
+  .tab {
+    flex: 1;
+    padding: 10px 8px;
+    border: none;
+    border-radius: 10px;
+    background: transparent;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    font-family: inherit;
+  }
+
+  .tab.active {
+    background: var(--work);
+    color: #fff;
+  }
+
+  .tab.short-break.active { background: var(--short-break); }
+  .tab.long-break.active { background: var(--long-break); }
+
+  .timer-ring {
+    position: relative;
+    width: 280px;
+    height: 280px;
+    margin: 0 auto 2rem;
+  }
+
+  svg {
+    transform: rotate(-90deg);
+    width: 100%;
+    height: 100%;
+  }
+
+  .bg-circle {
+    fill: none;
+    stroke: var(--card);
+    stroke-width: 8;
+  }
+
+  .progress-circle {
+    fill: none;
+    stroke: var(--work);
+    stroke-width: 8;
+    stroke-linecap: round;
+    transition: stroke-dashoffset 1s linear;
+  }
+
+  .progress-circle.break { stroke: var(--short-break); }
+  .progress-circle.long-break { stroke: var(--long-break); }
+
+  .time-display {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: 4.5rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.02em;
+  }
+
+  .controls {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-bottom: 1.5rem;
+  }
+
+  .btn {
+    padding: 12px 32px;
+    border: none;
+    border-radius: 30px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    font-family: inherit;
+    letter-spacing: 0.03em;
+  }
+
+  .btn:active { transform: scale(0.96); }
+
+  .btn-start {
+    background: var(--work);
+    color: #fff;
+    min-width: 120px;
+  }
+
+  .btn-start:hover { filter: brightness(1.15); }
+
+  .btn-reset {
+    background: transparent;
+    color: var(--muted);
+    border: 2px solid var(--card);
+  }
+
+  .btn-reset:hover { border-color: var(--muted); }
+
+  .pomodoro-count {
+    font-size: 0.9rem;
+    color: var(--muted);
+  }
+
+  .pomodoro-count span {
+    color: var(--work);
+    font-weight: 700;
+    font-size: 1.2rem;
+  }
+
+  .dots {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    margin-top: 0.5rem;
+  }
+
+  .dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--card);
+    transition: background 0.3s;
+  }
+
+  .dot.done { background: var(--work); }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>🍅 番 茄 钟</h1>
+
+  <div class="tabs">
+    <button class="tab active" data-mode="work">专注 25 分钟</button>
+    <button class="tab short-break" data-mode="short-break">小休 5 分钟</button>
+    <button class="tab long-break" data-mode="long-break">长休 15 分钟</button>
+  </div>
+
+  <div class="timer-ring">
+    <svg viewBox="0 0 280 280">
+      <circle class="bg-circle" cx="140" cy="140" r="130"/>
+      <circle class="progress-circle" id="progress" cx="140" cy="140" r="130"
+              stroke-dasharray="816.8" stroke-dashoffset="0"/>
+    </svg>
+    <div class="time-display" id="time">25:00</div>
+  </div>
+
+  <div class="controls">
+    <button class="btn btn-start" id="btnToggle">开 始</button>
+    <button class="btn btn-reset" id="btnReset">重 置</button>
+  </div>
+
+  <div class="pomodoro-count">
+    今日完成 <span id="count">0</span> 个番茄
+  </div>
+  <div class="dots" id="dots"></div>
+</div>
+
+<script>
+  const MODES = {
+    work:       { label: '专注', minutes: 25, color: 'var(--work)' },
+    'short-break': { label: '小休', minutes: 5,  color: 'var(--short-break)' },
+    'long-break':  { label: '长休', minutes: 15, color: 'var(--long-break)' },
+  };
+
+  const CIRCUMFERENCE = 2 * Math.PI * 130; // ~816.8
+
+  let mode = 'work';
+  let totalSeconds = MODES[mode].minutes * 60;
+  let remaining = totalSeconds;
+  let running = false;
+  let interval = null;
+  let pomodoroCount = 0;
+
+  const $time = document.getElementById('time');
+  const $progress = document.getElementById('progress');
+  const $btnToggle = document.getElementById('btnToggle');
+  const $btnReset = document.getElementById('btnReset');
+  const $count = document.getElementById('count');
+  const $dots = document.getElementById('dots');
+  const $tabs = document.querySelectorAll('.tab');
+
+  function fmt(s) {
+    const m = String(Math.floor(s / 60)).padStart(2, '0');
+    const sec = String(s % 60).padStart(2, '0');
+    return m + ':' + sec;
+  }
+
+  function setOffset(frac) {
+    $progress.style.strokeDashoffset = CIRCUMFERENCE * (1 - frac);
+  }
+
+  function updateDisplay() {
+    $time.textContent = fmt(remaining);
+    setOffset(remaining / totalSeconds);
+    document.title = fmt(remaining) + ' — 番茄钟';
+  }
+
+  function tick() {
+    remaining--;
+    updateDisplay();
+    if (remaining <= 0) {
+      stopTimer();
+      onComplete();
+    }
+  }
+
+  function startTimer() {
+    running = true;
+    interval = setInterval(tick, 1000);
+    $btnToggle.textContent = '暂 停';
+  }
+
+  function stopTimer() {
+    running = false;
+    clearInterval(interval);
+    interval = null;
+    $btnToggle.textContent = '开 始';
+  }
+
+  function toggleTimer() {
+    if (running) { stopTimer(); } else { startTimer(); }
+  }
+
+  function resetAnimation(work) {
+    $progress.style.transition = 'none';
+    work();
+    void $progress.offsetHeight;
+    $progress.style.transition = 'stroke-dashoffset 1s linear';
+  }
+
+  const sound = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACAf39/f4B/f3+AgH9/f3+Af39/gIB/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gH9/f3+Af3+AgH9/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gIB/f39/gH9/f3+Af39/gH9/f3+AgICAgICAgICAA==');
+
+  function onComplete() {
+    try { sound.currentTime = 0; sound.play().catch(()=>{}); } catch(e) {}
+
+    if (mode === 'work') {
+      pomodoroCount++;
+      $count.textContent = pomodoroCount;
+      renderDots();
+    }
+
+    switchMode(mode === 'work' ? 'short-break' : 'work');
+  }
+
+  function reset() {
+    stopTimer();
+    remaining = totalSeconds;
+    resetAnimation(() => { updateDisplay(); });
+    $btnToggle.textContent = '开 始';
+  }
+
+  function switchMode(newMode) {
+    stopTimer();
+    mode = newMode;
+    totalSeconds = MODES[mode].minutes * 60;
+    remaining = totalSeconds;
+
+    resetAnimation(() => {
+      updateDisplay();
+    });
+
+    $tabs.forEach(t => {
+      t.classList.remove('active', 'short-break', 'long-break');
+      if (t.dataset.mode === mode) {
+        t.classList.add('active');
+        if (mode !== 'work') t.classList.add(mode);
+      }
+    });
+
+    $progress.classList.remove('break', 'long-break');
+    if (mode === 'short-break') $progress.classList.add('break');
+    if (mode === 'long-break') $progress.classList.add('long-break');
+  }
+
+  function renderDots() {
+    let html = '';
+    for (let i = 0; i < Math.max(pomodoroCount, 8); i++) {
+      html += `<div class="dot${i < pomodoroCount ? ' done' : ''}"></div>`;
+    }
+    $dots.innerHTML = html;
+  }
+
+  // Event listeners
+  $btnToggle.addEventListener('click', toggleTimer);
+
+  $btnReset.addEventListener('click', reset);
+
+  $tabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      if (tab.dataset.mode !== mode) switchMode(tab.dataset.mode);
+    });
+  });
+
+  // Keyboard shortcuts
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' || e.code === 'KeyS') {
+      e.preventDefault();
+      toggleTimer();
+    }
+    if (e.code === 'KeyR') { reset(); }
+    if (e.code === 'Digit1') switchMode('work');
+    if (e.code === 'Digit2') switchMode('short-break');
+    if (e.code === 'Digit3') switchMode('long-break');
+  });
+
+  // Init
+  renderDots();
+  updateDisplay();
+</script>
+</body>
+</html>
